@@ -1,41 +1,52 @@
 import re
+import sys
 import time
-import threading
 import argparse
 import urllib.request
 from urllib.parse import urlparse
 
 
-class LibRuParser:
-    def __init__(self):
-        self.parsed_book = None
+class ttl_cached(object):
+    def __init__(self, ttl):
+        self.cache = {}
+        self.ttl = ttl
 
-    @staticmethod
-    def parse_lib_ru_book(url):
-        parsed_url = urlparse(url)
-        if parsed_url.netloc != 'lib.ru':
-            raise ValueError('book must be from lib.ru')
-        elif not parsed_url.path.endswith('.txt'):
-            raise ValueError('invalid book url')
+    def __call__(self, func):
+        def wrapped(*args):
+            now = time.time()
+            if args in self.cache:
+                value, last_update = self.cache[args]
+                if self.ttl > 0 and now - last_update > self.ttl:
+                    value = func(*args)
+                    self.cache[args] = (value, now)
+                return value
+            else:
+                value = func(*args)
+                self.cache[args] = (value, now)
+                return value
+        return wrapped
 
-        resource = urllib.request.urlopen(url)
-        content = resource.read().decode(
-            resource.headers.get_content_charset())
 
-        title = re.findall(r'<h2[^>]*>([^<]+)</h2>', content)[0]
+@ttl_cached(3600)
+def parse_lib_ru_book(url):
+    parsed_url = urlparse(url)
+    if parsed_url.netloc != 'lib.ru':
+        raise ValueError('book must be from lib.ru')
+    elif not parsed_url.path.endswith('.txt'):
+        raise ValueError('invalid book url')
 
-        try:
-            raw_text = content.split('</ul>', 1)[1].split('<pre>')[0]
-            text = re.sub(r'<.*?>', '', raw_text).strip()
-        except IndexError:
-            text = None
-        return title, text
+    resource = urllib.request.urlopen(url)
+    content = resource.read().decode(
+        resource.headers.get_content_charset())
 
-    def run_parse(self, url, timeout=3600):
-        while True:
-            self.parsed_book = self.parse_lib_ru_book(url)
-            print(self.parsed_book)
-            time.sleep(timeout)
+    title = re.findall(r'<h2[^>]*>([^<]+)</h2>', content)[0]
+
+    try:
+        raw_text = content.split('</ul>', 1)[1].split('<pre>')[0]
+        text = re.sub(r'<.*?>', '', raw_text).strip()
+    except IndexError:
+        text = None
+    return title, text
 
 
 if __name__ == '__main__':
@@ -43,8 +54,7 @@ if __name__ == '__main__':
     parser.add_argument('--url', action='store',
                         help='book URL from lib.ru', required=True)
     args = parser.parse_args()
+    result = parse_lib_ru_book(args.url)
+    print(result[0], file=sys.stderr)
+    print(result[1])
 
-    p = LibRuParser()
-
-    thread = threading.Thread(target=p.run_parse, args=(args.url,))
-    thread.start()
