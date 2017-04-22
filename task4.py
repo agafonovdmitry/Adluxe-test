@@ -5,15 +5,8 @@ from main import parse_lib_ru_book
 def text_to_sentences(source):
     """Simple text to sentences parser"""
     raw_text = source.replace('--', '\u2014')
-
+    raw_text = raw_text.replace('\n', ' ')
     text_list = list(raw_text)
-
-    for match in re.finditer('\n', raw_text):
-        index = match.start()
-        if raw_text[index-1] in '.?!-':
-            text_list[index] = ''
-        else:
-            text_list[index] = ' '
 
     raw_text = ''.join(text_list)
     raw_text = re.sub(' +', ' ', raw_text)
