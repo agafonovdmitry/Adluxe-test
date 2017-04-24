@@ -36,6 +36,7 @@ def parse_lib_ru_book(url):
         raise ValueError('invalid book url')
 
     resource = urllib.request.urlopen(url)
+    print("*** Quering LIB.ru!")
     content = resource.read().decode(
         resource.headers.get_content_charset())
 
